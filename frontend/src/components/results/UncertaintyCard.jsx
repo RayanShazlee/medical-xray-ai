@@ -19,9 +19,10 @@ export default function UncertaintyCard({ uncertainty }) {
   const reliabilityLabel = rawReliability.includes('—') ? rawReliability.split('—')[0].trim() : rawReliability
   
   const meanConf = uncertainty.mean_confidence ? (uncertainty.mean_confidence * 100).toFixed(1) : '—'
-  const stdConf = uncertainty.std_confidence || uncertainty.mean_std
-    ? ((uncertainty.std_confidence || uncertainty.mean_std) * 100).toFixed(2) 
-    : '—'
+  
+  // Get the raw std value — backend sends std_confidence as a small float (e.g. 0.02)
+  const rawStd = uncertainty.std_confidence ?? uncertainty.mean_std ?? null
+  const stdConf = rawStd != null ? (rawStd * 100).toFixed(2) : '—'
   const nPasses = uncertainty.n_forward || uncertainty.n_forward_passes || uncertainty.mc_dropout_runs || 15
   const stdNum = parseFloat(stdConf) || 0
 
