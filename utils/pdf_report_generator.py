@@ -441,16 +441,32 @@ class PDFReportGenerator:
         if uncertainty:
             story.extend(self._section_header_block("📊", "AI CONFIDENCE ASSESSMENT"))
             unc_data = []
-            if uncertainty.get('confidence_level'):
-                conf_color = self.SUCCESS if uncertainty['confidence_level'] == 'High' else self.WARNING
+            
+            # confidence_level OR reliability (backend sends 'reliability')
+            conf_level = uncertainty.get('confidence_level') or uncertainty.get('reliability', '')
+            if conf_level:
+                conf_label = conf_level.split('—')[0].strip() if '—' in conf_level else conf_level
+                conf_color = self.SUCCESS if conf_label.startswith('HIGH') else self.WARNING
+                mean_conf = uncertainty.get('mean_confidence', 0)
                 unc_data.append(self._info_row('Overall Confidence', 
-                    f"{uncertainty['confidence_level']} ({uncertainty.get('mean_confidence', 0)*100:.1f}%)"))
-            if uncertainty.get('prediction_stability'):
-                unc_data.append(self._info_row('Prediction Stability', uncertainty['prediction_stability']))
-            if uncertainty.get('mc_dropout_runs'):
-                unc_data.append(self._info_row('Monte Carlo Samples', str(uncertainty['mc_dropout_runs'])))
-            if uncertainty.get('mean_std'):
-                unc_data.append(self._info_row('Mean Uncertainty (σ)', f"{uncertainty['mean_std']:.4f}"))
+                    f"{conf_label} ({mean_conf*100:.1f}%)"))
+            
+            # prediction_stability OR reliability description
+            stability = uncertainty.get('prediction_stability')
+            if not stability and '—' in (uncertainty.get('reliability') or ''):
+                stability = uncertainty['reliability'].split('—', 1)[1].strip()
+            if stability:
+                unc_data.append(self._info_row('Prediction Stability', stability))
+            
+            # mc_dropout_runs OR n_forward
+            n_runs = uncertainty.get('mc_dropout_runs') or uncertainty.get('n_forward') or uncertainty.get('n_forward_passes')
+            if n_runs:
+                unc_data.append(self._info_row('Monte Carlo Samples', str(n_runs)))
+            
+            # mean_std OR std_confidence
+            std_val = uncertainty.get('mean_std') or uncertainty.get('std_confidence')
+            if std_val:
+                unc_data.append(self._info_row('Mean Uncertainty (σ)', f"{std_val:.4f}"))
             
             if unc_data:
                 unc_table = Table(unc_data, colWidths=[160, 300])

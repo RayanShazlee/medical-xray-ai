@@ -8,10 +8,21 @@ const RELIABILITY_STYLES = {
 }
 
 export default function UncertaintyCard({ uncertainty }) {
-  const reliability = uncertainty.reliability || 'MODERATE'
+  // Backend sends reliability as "HIGH — Consistent predictions across samples"
+  // Extract just the first word (HIGH, MODERATE, LOW, VERY) for style lookup
+  const rawReliability = uncertainty.reliability || uncertainty.confidence_level || 'MODERATE'
+  const reliabilityKey = rawReliability.split('—')[0].trim().replace(/\s+/g, '_')
+  const reliability = RELIABILITY_STYLES[reliabilityKey] ? reliabilityKey : 
+    rawReliability.startsWith('HIGH') ? 'HIGH' :
+    rawReliability.startsWith('LOW') ? 'LOW' :
+    rawReliability.startsWith('VERY') ? 'VERY_LOW' : 'MODERATE'
+  const reliabilityLabel = rawReliability.includes('—') ? rawReliability.split('—')[0].trim() : rawReliability
+  
   const meanConf = uncertainty.mean_confidence ? (uncertainty.mean_confidence * 100).toFixed(1) : '—'
-  const stdConf = uncertainty.std_confidence ? (uncertainty.std_confidence * 100).toFixed(2) : '—'
-  const nPasses = uncertainty.n_forward_passes || 15
+  const stdConf = uncertainty.std_confidence || uncertainty.mean_std
+    ? ((uncertainty.std_confidence || uncertainty.mean_std) * 100).toFixed(2) 
+    : '—'
+  const nPasses = uncertainty.n_forward || uncertainty.n_forward_passes || uncertainty.mc_dropout_runs || 15
   const stdNum = parseFloat(stdConf) || 0
 
   const varianceColor = stdNum < 5 ? 'bg-emerald-500' : stdNum < 10 ? 'bg-amber-500' : 'bg-red-500'
@@ -28,7 +39,7 @@ export default function UncertaintyCard({ uncertainty }) {
           <div className="text-4xl font-black text-sky-400 mb-1">{meanConf}%</div>
           <div className="text-xs text-slate-500">Mean Confidence</div>
           <span className={`mt-2 px-3 py-1 rounded-full text-[10px] font-bold border ${RELIABILITY_STYLES[reliability]}`}>
-            {reliability} Reliability
+            {reliabilityLabel} Reliability
           </span>
         </div>
 
