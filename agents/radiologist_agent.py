@@ -807,6 +807,9 @@ Provide a comprehensive structured radiological analysis:
         
         Run multiple forward passes with dropout enabled to estimate
         predictive uncertainty. High std = model is uncertain.
+        
+        DenseNet-121 doesn't have native Dropout layers, so we inject
+        dropout on the feature vector before the classifier head.
         """
         if self.chexnet is None:
             return {}
@@ -814,19 +817,28 @@ Provide a comprehensive structured radiological analysis:
         try:
             input_tensor = self.transform(image).unsqueeze(0)
             
-            # Enable dropout for MC sampling
-            def enable_dropout(model):
-                for module in model.modules():
-                    if isinstance(module, torch.nn.Dropout):
-                        module.train()
+            # DenseNet-121 has NO nn.Dropout layers, so standard MC Dropout
+            # produces identical outputs. Instead, we manually apply dropout
+            # to the pooled features before the classifier.
+            mc_dropout = torch.nn.Dropout(p=0.2)
+            mc_dropout.train()  # Keep dropout active
             
             self.chexnet.eval()
-            enable_dropout(self.chexnet)
             
             all_probs = []
             for _ in range(n_forward):
                 with torch.no_grad():
-                    logits = self.chexnet(input_tensor)
+                    # Extract features up to global average pool
+                    features = self.chexnet.backbone.features(input_tensor)
+                    out = torch.relu(features)
+                    out = self.chexnet.backbone.classifier[0](out)  # AdaptiveAvgPool2d
+                    out = out.view(out.size(0), -1)
+                    
+                    # Apply MC dropout on the feature vector (this is the key step)
+                    out = mc_dropout(out)
+                    
+                    # Classify
+                    logits = self.chexnet.backbone.classifier[1](out)
                     probs = torch.sigmoid(logits).squeeze(0).numpy()
                     all_probs.append(probs)
             
