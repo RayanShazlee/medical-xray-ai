@@ -1,0 +1,30 @@
+.venv/
+__pycache__/
+*.pyc
+*.py[cod]
+*.egg-info/
+.env
+.env.local
+.DS_Store
+.idea/
+.vscode/
+chest_xray/
+data/
+*.db
+static/uploads/*.png
+static/uploads/*.jpg
+static/uploads/*.jpeg
+static/reports/
+
+# Node (frontend source — only the built output in static/react/ is deployed)
+frontend/node_modules/
+frontend/.vite/
+
+# Books PDF (too large for git)
+books/*.pdf
+uploads/books/
+vectordb/books/
+*.dcm
+uploads/
+*.ipynb
+kaggle_train.sh

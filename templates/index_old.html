@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medical X-ray AI Clinical Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --accent: #38bdf8;
+            --accent-purple: #818cf8;
+            --text-primary: #e2e8f0;
+            --text-muted: #94a3b8;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #06b6d4;
+        }
+        * { box-sizing: border-box; }
+        body {
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--bg-tertiary);
+            color: var(--text-primary);
+            border-radius: 12px;
+            transition: border-color 0.3s;
+        }
+        .card:hover { border-color: rgba(56, 189, 248, 0.3); }
+        .card-title { color: var(--accent); font-weight: 600; }
+        .form-control, .form-select {
+            background: var(--bg-primary);
+            border-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            border-radius: 8px;
+        }
+        .form-control:focus, .form-select:focus {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border-color: var(--accent);
+            box-shadow: 0 0 0 0.2rem rgba(56, 189, 248, 0.25);
+        }
+        .form-label { color: var(--text-muted); font-size: 0.85em; font-weight: 500; }
+        .form-check-input { background-color: var(--bg-primary); border-color: var(--bg-tertiary); }
+        .form-check-input:checked { background-color: var(--accent); border-color: var(--accent); }
+        .btn-primary {
+            background: linear-gradient(135deg, #0ea5e9, #3b82f6);
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            padding: 10px 24px;
+        }
+        .btn-primary:hover { background: linear-gradient(135deg, #0284c7, #2563eb); transform: translateY(-1px); }
+        .btn-outline-accent {
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            background: transparent;
+            border-radius: 8px;
+        }
+        .btn-outline-accent:hover { background: rgba(56,189,248,0.1); color: var(--accent); }
+        .btn-pdf {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            border: none;
+            color: white;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+        .btn-pdf:hover { background: linear-gradient(135deg, #dc2626, #b91c1c); color: white; }
+        .preview-image {
+            max-width: 100%;
+            max-height: 400px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        .loading { display: none; text-align: center; margin: 20px 0; }
+        .diagnosis-text { font-size: 0.95em; line-height: 1.7; white-space: pre-wrap; }
+        .xray-comparison img { border-radius: 8px; border: 2px solid var(--bg-tertiary); transition: transform 0.3s; }
+        .xray-comparison img:hover { transform: scale(1.02); }
+        h1 {
+            background: linear-gradient(135deg, #38bdf8, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 700;
+        }
+        .feature-badge {
+            display: inline-block;
+            background: rgba(56, 189, 248, 0.1);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            color: var(--accent);
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.72em;
+            margin: 2px;
+        }
+        .spinner-border { color: var(--accent) !important; }
+        .confidence-bar-container {
+            background: var(--bg-primary);
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin: 4px 0;
+        }
+        .confidence-bar {
+            height: 22px;
+            border-radius: 4px;
+            transition: width 0.8s ease;
+            display: flex;
+            align-items: center;
+            padding-left: 8px;
+            font-size: 0.75em;
+            font-weight: 600;
+            color: #fff;
+        }
+        .confidence-high { background: linear-gradient(90deg, #ef4444, #f97316); }
+        .confidence-medium { background: linear-gradient(90deg, #f59e0b, #eab308); }
+        .confidence-low { background: linear-gradient(90deg, #3b82f6, #6366f1); }
+        .gradcam-hero { position: relative; display: inline-block; }
+        .gradcam-hero img { max-height: 500px; border-radius: 12px; border: 2px solid var(--accent); }
+        .certainty-overlay {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: rgba(0,0,0,0.85);
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 0.85em;
+            border: 1px solid var(--accent);
+        }
+        .certainty-value { font-size: 1.6em; font-weight: 800; }
+
+        /* ===== NEW TIER 2/3/4 STYLES ===== */
+        .section-divider {
+            border: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--bg-tertiary), transparent);
+            margin: 24px 0;
+        }
+        .progress-tracker {
+            background: var(--bg-secondary);
+            border: 1px solid var(--bg-tertiary);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 16px 0;
+        }
+        .progress-step {
+            display: flex;
+            align-items: center;
+            padding: 6px 0;
+            font-size: 0.85em;
+            color: var(--text-muted);
+            transition: all 0.3s;
+        }
+        .progress-step.active { color: var(--accent); font-weight: 600; }
+        .progress-step.done { color: var(--success); }
+        .progress-step .step-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+            font-size: 0.7em;
+            background: var(--bg-tertiary);
+        }
+        .progress-step.active .step-icon { background: var(--accent); color: var(--bg-primary); }
+        .progress-step.done .step-icon { background: var(--success); color: white; }
+        .progress-bar-custom {
+            height: 4px;
+            background: var(--bg-tertiary);
+            border-radius: 2px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--accent-purple));
+            border-radius: 2px;
+            transition: width 0.5s ease;
+        }
+
+        /* Patient context form */
+        .patient-form { background: rgba(56,189,248,0.03); border-radius: 12px; padding: 16px; }
+        .patient-form .form-control, .patient-form .form-select {
+            font-size: 0.85em;
+            padding: 6px 10px;
+        }
+
+        /* CTR gauge */
+        .ctr-gauge {
+            position: relative;
+            width: 160px;
+            height: 80px;
+            margin: 0 auto;
+        }
+        .ctr-value-display {
+            font-size: 2em;
+            font-weight: 800;
+            text-align: center;
+        }
+
+        /* Differential diagnosis */
+        .diff-row {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            background: var(--bg-primary);
+            border-radius: 8px;
+            margin: 4px 0;
+            transition: background 0.2s;
+        }
+        .diff-row:hover { background: rgba(56,189,248,0.05); }
+        .diff-prob-bar {
+            height: 6px;
+            border-radius: 3px;
+            background: var(--bg-tertiary);
+            flex: 1;
+            margin: 0 12px;
+            overflow: hidden;
+        }
+        .diff-prob-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.6s ease;
+        }
+
+        /* Clinical decision cards */
+        .cds-card {
+            background: var(--bg-primary);
+            border-radius: 10px;
+            padding: 14px;
+            border-left: 3px solid var(--accent);
+        }
+        .cds-card.urgent { border-left-color: var(--danger); }
+        .cds-card.warning { border-left-color: var(--warning); }
+        .cds-card.success { border-left-color: var(--success); }
+        .cds-card h6 { font-size: 0.85em; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        /* Uncertainty meter */
+        .uncertainty-meter {
+            background: var(--bg-primary);
+            border-radius: 10px;
+            padding: 14px;
+        }
+        .uncertainty-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 700;
+        }
+        .uncertainty-HIGH { background: rgba(34,197,94,0.15); color: var(--success); }
+        .uncertainty-MODERATE { background: rgba(245,158,11,0.15); color: var(--warning); }
+        .uncertainty-LOW { background: rgba(239,68,68,0.15); color: var(--danger); }
+        .uncertainty-VERY_LOW { background: rgba(239,68,68,0.3); color: var(--danger); }
+
+        /* Report history sidebar */
+        .history-panel {
+            position: fixed;
+            right: -400px;
+            top: 0;
+            width: 400px;
+            height: 100vh;
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--bg-tertiary);
+            z-index: 1050;
+            transition: right 0.3s ease;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        .history-panel.open { right: 0; }
+        .history-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1040;
+        }
+        .history-overlay.open { display: block; }
+        .history-item {
+            background: var(--bg-primary);
+            border-radius: 8px;
+            padding: 12px;
+            margin: 8px 0;
+            cursor: pointer;
+            transition: background 0.2s;
+            border: 1px solid transparent;
+        }
+        .history-item:hover { border-color: rgba(56,189,248,0.3); }
+
+        /* DICOM metadata */
+        .dicom-tag {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 8px;
+            font-size: 0.8em;
+            border-bottom: 1px solid rgba(51,65,85,0.5);
+        }
+        .dicom-tag:last-child { border-bottom: none; }
+        .dicom-label { color: var(--text-muted); }
+        .dicom-value { color: var(--text-primary); font-weight: 500; }
+
+        /* Severity badge */
+        .severity-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 0.9em;
+            text-transform: uppercase;
+        }
+        .severity-mild { background: rgba(34,197,94,0.15); color: var(--success); border: 1px solid var(--success); }
+        .severity-moderate { background: rgba(245,158,11,0.15); color: var(--warning); border: 1px solid var(--warning); }
+        .severity-severe { background: rgba(239,68,68,0.15); color: var(--danger); border: 1px solid var(--danger); }
+        .severity-critical { background: rgba(239,68,68,0.3); color: #fca5a5; border: 1px solid var(--danger); }
+        .severity-normal { background: rgba(34,197,94,0.1); color: var(--success); border: 1px solid var(--success); }
+
+        /* Floating action buttons */
+        .fab-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 1000;
+        }
+        .fab {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            font-size: 1.2em;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
+        }
+        .fab:hover { transform: scale(1.1); }
+        .fab-history { background: linear-gradient(135deg, var(--accent), var(--accent-purple)); color: white; }
+        .fab-pdf { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; display: none; }
+        .fab-top { background: var(--bg-tertiary); color: var(--text-primary); }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .history-panel { width: 100%; right: -100%; }
+            .fab-container { bottom: 16px; right: 16px; }
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in-up { animation: fadeInUp 0.5s ease forwards; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .pulse { animation: pulse 1.5s infinite; }
+    </style>
+</head>
+<body>
+    <!-- History Sidebar Overlay -->
+    <div class="history-overlay" id="historyOverlay" onclick="toggleHistory()"></div>
+    <div class="history-panel" id="historyPanel">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 style="color: var(--accent); margin: 0;"><i class="fas fa-history"></i> Report History</h5>
+            <button class="btn btn-sm btn-outline-accent" onclick="toggleHistory()"><i class="fas fa-times"></i></button>
+        </div>
+        <div id="historyList"><p class="text-muted text-center">Loading...</p></div>
+        <hr class="section-divider">
+        <div id="dashboardStats"></div>
+    </div>
+
+    <div class="container mt-4 mb-5">
+        <!-- Header -->
+        <div class="text-center mb-4 fade-in-up">
+            <h1 class="display-5">🏥 Medical X-ray AI Clinical Platform</h1>
+            <p class="text-muted">
+                Advanced Clinical Decision Support • CheXNet 14-Pathology • RAG Knowledge Base
+            </p>
+            <div>
+                <span class="feature-badge">🤖 Enhancement Agent</span>
+                <span class="feature-badge">🔬 14-Disease Detection</span>
+                <span class="feature-badge">🔥 Grad-CAM++</span>
+                <span class="feature-badge">🫁 Anatomical Segmentation</span>
+                <span class="feature-badge">📏 CTR Measurement</span>
+                <span class="feature-badge">🧠 Differential Diagnosis</span>
+                <span class="feature-badge">💊 Clinical Decision Support</span>
+                <span class="feature-badge">📊 Uncertainty Quantification</span>
+                <span class="feature-badge">🩻 DICOM Support</span>
+                <span class="feature-badge">📄 PDF Reports</span>
+                <span class="feature-badge">🌐 Multi-Language</span>
+                <span class="feature-badge">📚 Textbook RAG</span>
+            </div>
+        </div>
+        
+        <!-- Upload + Patient Context Section -->
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="card fade-in-up">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="fas fa-upload"></i> Upload & Patient Context</h5>
+                        <form id="uploadForm">
+                            <div class="row">
+                                <!-- File Upload -->
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Medical Image (X-ray, DICOM, PDF)</label>
+                                        <input type="file" class="form-control" id="imageInput" 
+                                               accept="image/*,.dcm,.dicom,.pdf" required>
+                                        <div class="form-text text-muted" style="font-size: 0.75em;">
+                                            Supports: PNG, JPG, DICOM (.dcm), PDF
+                                        </div>
+                                    </div>
+                                    <!-- Language Selector -->
+                                    <div class="mb-3">
+                                        <label class="form-label"><i class="fas fa-globe"></i> Report Language</label>
+                                        <select class="form-select" id="languageSelect">
+                                            <option value="en" selected>🇬🇧 English</option>
+                                            <option value="ar">🇸🇦 العربية (Arabic)</option>
+                                            <option value="ur">🇵🇰 اردو (Urdu)</option>
+                                            <option value="hi">🇮🇳 हिन्दी (Hindi)</option>
+                                            <option value="es">🇪🇸 Español (Spanish)</option>
+                                            <option value="fr">🇫🇷 Français (French)</option>
+                                            <option value="de">🇩🇪 Deutsch (German)</option>
+                                            <option value="zh">🇨🇳 中文 (Chinese)</option>
+                                            <option value="pt">🇧🇷 Português (Portuguese)</option>
+                                            <option value="tr">🇹🇷 Türkçe (Turkish)</option>
+                                            <option value="ru">🇷🇺 Русский (Russian)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <!-- Patient Context -->
+                                <div class="col-md-6">
+                                    <div class="patient-form">
+                                        <p class="form-label mb-2"><i class="fas fa-user-injured"></i> Patient Context <span class="text-muted">(optional — improves diagnosis)</span></p>
+                                        <div class="row g-2">
+                                            <div class="col-4">
+                                                <input type="number" class="form-control" id="patientAge" placeholder="Age" min="0" max="120">
+                                            </div>
+                                            <div class="col-4">
+                                                <select class="form-select" id="patientSex">
+                                                    <option value="">Sex</option>
+                                                    <option value="M">Male</option>
+                                                    <option value="F">Female</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-4">
+                                                <input type="text" class="form-control" id="symptomDuration" placeholder="Duration">
+                                            </div>
+                                        </div>
+                                        <div class="mt-2">
+                                            <input type="text" class="form-control" id="patientSymptoms" 
+                                                   placeholder="Symptoms: e.g., cough, fever, dyspnea...">
+                                        </div>
+                                        <div class="mt-2 d-flex gap-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="smokingCheck">
+                                                <label class="form-check-label" for="smokingCheck" style="font-size:0.8em;">🚬 Smoker</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="immunoCheck">
+                                                <label class="form-check-label" for="immunoCheck" style="font-size:0.8em;">🛡️ Immunocompromised</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="comorbidCheck">
+                                                <label class="form-check-label" for="comorbidCheck" style="font-size:0.8em;">🏥 Comorbidities</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100 mt-3" id="analyzeBtn">
+                                <i class="fas fa-search-plus"></i> Analyze X-ray Image
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Real-time Progress Tracker -->
+        <div class="row justify-content-center mt-3">
+            <div class="col-lg-10">
+                <div class="progress-tracker" id="progressTracker" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 style="color: var(--accent); margin: 0;"><i class="fas fa-cogs"></i> Analysis Pipeline</h6>
+                        <span id="progressPercent" class="pulse" style="color: var(--accent); font-weight: 700;">0%</span>
+                    </div>
+                    <div class="progress-bar-custom">
+                        <div class="progress-bar-fill" id="progressBarFill" style="width: 0%;"></div>
+                    </div>
+                    <div class="mt-3" id="progressSteps">
+                        <div class="progress-step" id="step-enhancement"><div class="step-icon">1</div> 🤖 Enhancement Agent — Quality Check</div>
+                        <div class="progress-step" id="step-segmentation"><div class="step-icon">2</div> 🫁 Anatomical Segmentation & CTR</div>
+                        <div class="progress-step" id="step-classification"><div class="step-icon">3</div> 🔬 CheXNet 14-Pathology Classification</div>
+                        <div class="progress-step" id="step-uncertainty"><div class="step-icon">4</div> 📊 MC Dropout Uncertainty Quantification</div>
+                        <div class="progress-step" id="step-gradcam"><div class="step-icon">5</div> 🔥 Grad-CAM++ Heatmap Generation</div>
+                        <div class="progress-step" id="step-differentials"><div class="step-icon">6</div> 🧠 Differential Diagnosis</div>
+                        <div class="progress-step" id="step-clinical"><div class="step-icon">7</div> 💊 Clinical Decision Support</div>
+                        <div class="progress-step" id="step-rag"><div class="step-icon">8</div> 📚 RAG Knowledge Retrieval</div>
+                        <div class="progress-step" id="step-report"><div class="step-icon">9</div> 📋 Generating Report</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="row mt-4">
+            <div class="col-lg-12" id="results"></div>
+        </div>
+
+        <!-- Query Section -->
+        <div class="row mt-4">
+            <div class="col-lg-8 mx-auto">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="fas fa-comment-medical"></i> Ask Questions</h5>
+                        <form id="queryForm">
+                            <div class="mb-3">
+                                <input type="text" class="form-control" id="queryInput" 
+                                       placeholder="e.g. What are the signs of pneumonia in this X-ray?">
+                            </div>
+                            <button type="submit" class="btn btn-outline-accent w-100">
+                                <i class="fas fa-search"></i> Search Knowledge Base
+                            </button>
+                        </form>
+                        <div id="queryResults" class="mt-3"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Action Buttons -->
+    <div class="fab-container">
+        <button class="fab fab-pdf" id="fabPdf" onclick="exportPDF()" title="Export PDF Report">
+            <i class="fas fa-file-pdf"></i>
+        </button>
+        <button class="fab fab-history" onclick="toggleHistory()" title="Report History">
+            <i class="fas fa-history"></i>
+        </button>
+        <button class="fab fab-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="Back to Top">
+            <i class="fas fa-arrow-up"></i>
+        </button>
+    </div>
+
+    <script>
+        // ===== Global state =====
+        let currentAnalysisData = null;
+        let socket = null;
+
+        // ===== WebSocket for real-time progress =====
+        try {
+            socket = io();
+            socket.on('connect', () => console.log('WebSocket connected'));
+            socket.on('analysis_progress', (data) => {
+                updateProgress(data.step, data.progress, data.message);
+            });
+        } catch(e) {
+            console.warn('WebSocket not available, falling back to simple loading');
+        }
+
+        function updateProgress(step, progress, message) {
+            const tracker = document.getElementById('progressTracker');
+            tracker.style.display = 'block';
+            
+            document.getElementById('progressPercent').textContent = `${progress}%`;
+            document.getElementById('progressBarFill').style.width = `${progress}%`;
+            
+            // Update step states
+            const stepMap = {
+                'enhancement': 'step-enhancement',
+                'segmentation': 'step-segmentation',
+                'classification': 'step-classification',
+                'uncertainty': 'step-uncertainty',
+                'gradcam': 'step-gradcam',
+                'differentials': 'step-differentials',
+                'clinical': 'step-clinical',
+                'rag': 'step-rag',
+                'report': 'step-report'
+            };
+            
+            const stepOrder = Object.keys(stepMap);
+            const currentIdx = stepOrder.indexOf(step);
+            
+            stepOrder.forEach((s, idx) => {
+                const el = document.getElementById(stepMap[s]);
+                if (!el) return;
+                el.classList.remove('active', 'done');
+                if (idx < currentIdx) el.classList.add('done');
+                else if (idx === currentIdx) el.classList.add('active');
+            });
+        }
+
+        // ===== File Upload Handler =====
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('imageInput');
+            const file = fileInput.files[0];
+            if (!file) { alert('Please select a file'); return; }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            // Append patient context
+            const age = document.getElementById('patientAge').value;
+            const sex = document.getElementById('patientSex').value;
+            const symptoms = document.getElementById('patientSymptoms').value;
+            const duration = document.getElementById('symptomDuration').value;
+            const smoking = document.getElementById('smokingCheck').checked;
+            const immuno = document.getElementById('immunoCheck').checked;
+            const comorbid = document.getElementById('comorbidCheck').checked;
+            const language = document.getElementById('languageSelect').value;
+            
+            if (age) formData.append('patient_age', age);
+            if (sex) formData.append('patient_sex', sex);
+            if (symptoms) formData.append('patient_symptoms', symptoms);
+            if (duration) formData.append('symptom_duration', duration);
+            if (smoking) formData.append('smoking', 'true');
+            if (immuno) formData.append('immunocompromised', 'true');
+            if (comorbid) formData.append('comorbidities', 'true');
+            formData.append('language', language);
+            
+            try {
+                // Show progress tracker
+                document.getElementById('progressTracker').style.display = 'block';
+                document.getElementById('progressBarFill').style.width = '0%';
+                document.getElementById('progressPercent').textContent = '0%';
+                document.querySelectorAll('.progress-step').forEach(s => s.classList.remove('active','done'));
+                document.getElementById('results').innerHTML = '';
+                document.getElementById('analyzeBtn').disabled = true;
+                document.getElementById('analyzeBtn').innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Analyzing...';
+                
+                const response = await fetch('/upload', { method: 'POST', body: formData });
+                const data = await response.json();
+                
+                document.getElementById('analyzeBtn').disabled = false;
+                document.getElementById('analyzeBtn').innerHTML = '<i class="fas fa-search-plus"></i> Analyze X-ray Image';
+                
+                if (!response.ok) throw new Error(data.error || 'Upload failed');
+                
+                // Complete progress
+                document.getElementById('progressBarFill').style.width = '100%';
+                document.getElementById('progressPercent').textContent = '100%';
+                document.querySelectorAll('.progress-step').forEach(s => { s.classList.remove('active'); s.classList.add('done'); });
+                
+                currentAnalysisData = data;
+                document.getElementById('fabPdf').style.display = 'flex';
+                
+                // Render results
+                renderResults(data);
+                
+                // Auto-hide progress after 2s
+                setTimeout(() => {
+                    document.getElementById('progressTracker').style.display = 'none';
+                }, 2000);
+                
+            } catch (error) {
+                document.getElementById('progressTracker').style.display = 'none';
+                document.getElementById('analyzeBtn').disabled = false;
+                document.getElementById('analyzeBtn').innerHTML = '<i class="fas fa-search-plus"></i> Analyze X-ray Image';
+                document.getElementById('results').innerHTML = `
+                    <div class="alert alert-danger" role="alert">
+                        <i class="fas fa-exclamation-triangle"></i> ${error.message || 'An error occurred.'}
+                    </div>`;
+            }
+        });
+
+        // ===== RENDER ALL RESULTS =====
+        function renderResults(data) {
+            let html = '';
+            
+            // --- DICOM Metadata ---
+            if (data.dicom_metadata && Object.keys(data.dicom_metadata).length > 0) {
+                html += renderDicomMetadata(data.dicom_metadata);
+            }
+            
+            // --- Quality Report ---
+            if (data.quality_report) {
+                html += renderQualityReport(data.quality_report);
+            }
+            
+            // --- Enhanced Comparison ---
+            if (data.enhanced_comparison) {
+                html += `<div class="card mb-3 fade-in-up">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="fas fa-magic"></i> Image Enhancement</h5>
+                        <p class="text-muted mb-2" style="font-size: 0.85em;">Left: Original | Right: CLAHE + Denoising + Sharpening</p>
+                        <img src="data:image/png;base64,${data.enhanced_comparison}" class="img-fluid rounded" 
+                             style="max-height: 400px; display: block; margin: 0 auto;">
+                    </div>
+                </div>`;
+            }
+            
+            // --- Anatomical Segmentation + CTR ---
+            if (data.segmentation_overlay || data.ctr) {
+                html += renderSegmentationCTR(data);
+            }
+            
+            // --- Uncertainty Quantification ---
+            if (data.uncertainty && Object.keys(data.uncertainty).length > 0) {
+                html += renderUncertainty(data.uncertainty);
+            }
+            
+            // --- Grad-CAM Heatmap (only when significant pathology found) ---
+            if (data.heatmap) {
+                html += renderGradCAM(data);
+            } else if (data.detections && data.detections.length > 0) {
+                // Show detections standalone without heatmap (no significant pathology for Grad-CAM)
+                html += renderDetectionsOnly(data.detections);
+            }
+            
+            // --- Differential Diagnosis ---
+            if (data.differentials && data.differentials.length > 0) {
+                html += renderDifferentials(data.differentials);
+            }
+            
+            // --- Clinical Decision Support ---
+            if (data.clinical_decision && Object.keys(data.clinical_decision).length > 0) {
+                html += renderClinicalDecision(data.clinical_decision);
+            }
+            
+            // --- Diagnosis Report ---
+            if (data.diagnosis) {
+                html += renderDiagnosis(data.diagnosis, data.severity, data.language);
+            }
+            
+            // --- Original X-ray (shown when no heatmap and no segmentation overlay) ---
+            if (data.image_path && !data.heatmap && !data.segmentation_overlay) {
+                html += `<div class="card mb-3 fade-in-up"><div class="card-body text-center">
+                    <h5 class="card-title">📷 Uploaded X-ray</h5>
+                    <img src="${data.image_path}" class="img-fluid rounded" style="max-height: 400px;">
+                </div></div>`;
+            }
+            
+            // --- PDF text ---
+            if (data.text_content) {
+                html += `<div class="card mb-3"><div class="card-body">
+                    <h5 class="card-title">📄 Extracted Text</h5>
+                    <p>${data.text_content}</p>
+                </div></div>`;
+            }
+            
+            // --- PDF Export Button ---
+            if (data.diagnosis) {
+                html += `<div class="text-center mt-3 mb-4 fade-in-up">
+                    <button class="btn btn-pdf btn-lg" onclick="exportPDF()">
+                        <i class="fas fa-file-pdf me-2"></i> Export Professional PDF Report
+                    </button>
+                </div>`;
+            }
+            
+            document.getElementById('results').innerHTML = html;
+        }
+
+        // ===== RENDER: DICOM Metadata =====
+        function renderDicomMetadata(meta) {
+            const importantTags = [
+                ['PatientAge', 'Age'], ['PatientSex', 'Sex'], ['StudyDate', 'Study Date'],
+                ['Modality', 'Modality'], ['ViewPosition', 'View'], ['BodyPartExamined', 'Body Part'],
+                ['InstitutionName', 'Institution'], ['ReferringPhysicianName', 'Physician'],
+                ['PixelSpacing', 'Pixel Spacing'], ['KVP', 'kVp'], ['Exposure', 'Exposure']
+            ];
+            let tagsHtml = '';
+            importantTags.forEach(([key, label]) => {
+                if (meta[key]) {
+                    let val = meta[key];
+                    if (Array.isArray(val)) val = val.join(' × ');
+                    tagsHtml += `<div class="dicom-tag"><span class="dicom-label">${label}</span><span class="dicom-value">${val}</span></div>`;
+                }
+            });
+            if (!tagsHtml) return '';
+            return `<div class="card mb-3 fade-in-up">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-x-ray"></i> DICOM Metadata</h5>
+                    <div style="background: var(--bg-primary); border-radius: 8px; padding: 8px;">${tagsHtml}</div>
+                </div>
+            </div>`;
+        }
+
+        // ===== RENDER: Quality Report =====
+        function renderQualityReport(qr) {
+            const qualityColor = qr.quality === 'good' ? 'var(--success)' : 'var(--warning)';
+            const qualityIcon = qr.quality === 'good' ? '✅' : '⚠️';
+            const qualityLabel = qr.quality === 'good' ? 'GOOD' : 'POOR — Auto-Enhanced';
+            
+            let issuesHtml = '';
+            if (qr.issues && qr.issues.length > 0) {
+                const icons = {'underexposed':'🌑','overexposed':'☀️','low_contrast':'🔲','noisy':'📡','blurry':'🔍','compressed_range':'📊'};
+                issuesHtml = qr.issues.map(i => `<span class="badge" style="background:var(--bg-tertiary);color:var(--warning);margin:2px;padding:4px 8px;font-size:0.8em;">${icons[i]||'⚠️'} ${i.replace('_',' ')}</span>`).join('');
+            } else {
+                issuesHtml = '<span class="badge" style="background:var(--bg-tertiary);color:var(--success);padding:4px 8px;">No issues</span>';
+            }
+            
+            let actionsHtml = '';
+            if (qr.actions_applied && qr.actions_applied.length > 0) {
+                actionsHtml = qr.actions_applied.map(a => `<span class="badge" style="background:rgba(56,189,248,0.15);color:var(--accent);margin:2px;padding:4px 8px;font-size:0.8em;">🔧 ${a}</span>`).join('');
+            } else {
+                actionsHtml = '<span style="color:var(--text-muted);font-size:0.85em;">None needed</span>';
+            }
+            
+            let metricsHtml = '';
+            if (qr.metrics) {
+                const m = qr.metrics;
+                metricsHtml = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;">
+                    <div style="background:var(--bg-primary);padding:6px 10px;border-radius:6px;text-align:center;"><div style="color:var(--text-muted);font-size:0.7em;">Brightness</div><div style="font-weight:700;color:${m.brightness<60||m.brightness>190?'var(--warning)':'var(--success)'};">${m.brightness}</div></div>
+                    <div style="background:var(--bg-primary);padding:6px 10px;border-radius:6px;text-align:center;"><div style="color:var(--text-muted);font-size:0.7em;">Contrast</div><div style="font-weight:700;color:${m.contrast<35?'var(--warning)':'var(--success)'};">${m.contrast}</div></div>
+                    <div style="background:var(--bg-primary);padding:6px 10px;border-radius:6px;text-align:center;"><div style="color:var(--text-muted);font-size:0.7em;">Sharpness</div><div style="font-weight:700;color:${m.sharpness<15?'var(--warning)':'var(--success)'};">${m.sharpness}</div></div>
+                </div>`;
+            }
+            
+            return `<div class="card mb-3 fade-in-up"><div class="card-body">
+                <h5 class="card-title"><i class="fas fa-robot"></i> Enhancement Agent — Quality Report</h5>
+                <div class="d-flex align-items-center mb-2">
+                    <span style="font-size:1.3em;margin-right:8px;">${qualityIcon}</span>
+                    <span style="font-size:1.1em;font-weight:700;color:${qualityColor};">Image Quality: ${qualityLabel}</span>
+                </div>
+                <div class="mb-2"><span style="color:var(--text-muted);font-size:0.85em;">Issues:</span><br>${issuesHtml}</div>
+                <div class="mb-2"><span style="color:var(--text-muted);font-size:0.85em;">Corrections:</span><br>${actionsHtml}</div>
+                ${metricsHtml}
+            </div></div>`;
+        }
+
+        // ===== RENDER: Segmentation + CTR =====
+        function renderSegmentationCTR(data) {
+            let segHtml = '';
+            if (data.segmentation_overlay) {
+                segHtml = `<div class="col-md-7 text-center mb-3">
+                    <img src="data:image/png;base64,${data.segmentation_overlay}" class="img-fluid rounded" style="max-height:450px; border:2px solid var(--accent);">
+                    <p class="text-muted mt-1" style="font-size:0.78em;">Anatomical zones with color-coded overlay</p>
+                </div>`;
+            }
+            
+            let ctrHtml = '';
+            if (data.ctr) {
+                const ctr = data.ctr;
+                const ctrVal = ctr.value ? (ctr.value * 100).toFixed(1) : '—';
+                const ctrColor = ctr.interpretation === 'Normal' ? 'var(--success)' : 
+                                 ctr.interpretation === 'Borderline' ? 'var(--warning)' : 'var(--danger)';
+                const ctrInterpretation = ctr.interpretation || 'N/A';
+                
+                let measureHtml = '';
+                if (data.measurements) {
+                    const ms = data.measurements;
+                    measureHtml = `<div class="mt-3" style="font-size:0.8em;">`;
+                    if (ms.right_lung_area) measureHtml += `<div class="dicom-tag"><span class="dicom-label">Right Lung</span><span class="dicom-value">${ms.right_lung_area}%</span></div>`;
+                    if (ms.left_lung_area) measureHtml += `<div class="dicom-tag"><span class="dicom-label">Left Lung</span><span class="dicom-value">${ms.left_lung_area}%</span></div>`;
+                    if (ms.lung_symmetry) measureHtml += `<div class="dicom-tag"><span class="dicom-label">Symmetry Ratio</span><span class="dicom-value">${ms.lung_symmetry}</span></div>`;
+                    measureHtml += `</div>`;
+                }
+                
+                ctrHtml = `<div class="col-md-5">
+                    <div class="text-center mb-3">
+                        <h6 style="color:var(--text-muted);"><i class="fas fa-heartbeat"></i> Cardiothoracic Ratio</h6>
+                        <div class="ctr-value-display" style="color:${ctrColor};">${ctrVal}%</div>
+                        <span class="badge" style="background:${ctrColor};color:white;padding:4px 14px;font-size:0.85em;border-radius:20px;">${ctrInterpretation}</span>
+                        <p class="text-muted mt-2" style="font-size:0.75em;">Normal: &lt;50% | Borderline: 50-55%</p>
+                    </div>
+                    ${measureHtml}
+                </div>`;
+            }
+            
+            return `<div class="card mb-3 fade-in-up"><div class="card-body">
+                <h5 class="card-title"><i class="fas fa-lungs"></i> Anatomical Segmentation & CTR</h5>
+                <div class="row">${segHtml}${ctrHtml}</div>
+            </div></div>`;
+        }
+
+        // ===== RENDER: Uncertainty =====
+        function renderUncertainty(unc) {
+            const reliability = unc.reliability || 'MODERATE';
+            const meanConf = unc.mean_confidence ? (unc.mean_confidence * 100).toFixed(1) : '—';
+            const stdConf = unc.std_confidence ? (unc.std_confidence * 100).toFixed(2) : '—';
+            const nPasses = unc.n_forward_passes || 15;
+            
+            return `<div class="card mb-3 fade-in-up"><div class="card-body">
+                <h5 class="card-title"><i class="fas fa-chart-bar"></i> Uncertainty Quantification (MC Dropout)</h5>
+                <div class="row align-items-center">
+                    <div class="col-md-4 text-center">
+                        <div style="font-size:2.5em;font-weight:800;color:var(--accent);">${meanConf}%</div>
+                        <div style="color:var(--text-muted);font-size:0.85em;">Mean Confidence</div>
+                        <span class="uncertainty-badge uncertainty-${reliability}">${reliability} Reliability</span>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="uncertainty-meter">
+                            <div class="d-flex justify-content-between mb-2" style="font-size:0.85em;">
+                                <span>Prediction Variance (σ)</span>
+                                <span style="font-weight:700;">±${stdConf}%</span>
+                            </div>
+                            <div class="progress-bar-custom">
+                                <div class="progress-bar-fill" style="width:${Math.min(100, parseFloat(stdConf) * 10)}%;background:${parseFloat(stdConf)<5?'var(--success)':parseFloat(stdConf)<10?'var(--warning)':'var(--danger)'};"></div>
+                            </div>
+                            <div class="mt-2" style="font-size:0.75em;color:var(--text-muted);">
+                                <i class="fas fa-info-circle"></i> Based on ${nPasses} stochastic forward passes with dropout enabled.
+                                Lower variance = more consistent predictions.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div></div>`;
+        }
+
+        // ===== RENDER: Grad-CAM =====
+        function renderGradCAM(data) {
+            let detectionsHtml = '';
+            if (data.detections && data.detections.length > 0) {
+                data.detections.forEach(d => {
+                    const pct = (d.score * 100).toFixed(1);
+                    let barClass = 'confidence-low';
+                    if (d.score > 0.4) barClass = 'confidence-high';
+                    else if (d.score > 0.2) barClass = 'confidence-medium';
+                    detectionsHtml += `<div class="confidence-bar-container">
+                        <div class="d-flex justify-content-between mb-1" style="font-size:0.8em;">
+                            <span>${d.label}</span><span class="fw-bold">${pct}%</span>
+                        </div>
+                        <div class="confidence-bar ${barClass}" style="width:${Math.max(pct,3)}%;"></div>
+                    </div>`;
+                });
+            }
+            
+            const primaryLabel = data.detections?.[0]?.label || 'Analysis';
+            const primaryScore = data.detections?.[0] ? (data.detections[0].score * 100).toFixed(1) : '—';
+            const primaryColor = data.detections?.[0]?.score > 0.4 ? 'var(--danger)' : data.detections?.[0]?.score > 0.2 ? 'var(--warning)' : 'var(--accent)';
+            
+            return `<div class="card mb-3 fade-in-up"><div class="card-body">
+                <h5 class="card-title"><i class="fas fa-fire"></i> Grad-CAM++ Disease Localization</h5>
+                <div class="row">
+                    <div class="col-md-7 text-center mb-3">
+                        <div class="gradcam-hero">
+                            <img src="data:image/png;base64,${data.heatmap}" class="img-fluid">
+                            <div class="certainty-overlay">
+                                <div style="color:${primaryColor};" class="certainty-value">${primaryScore}%</div>
+                                <div style="font-size:0.8em;color:var(--text-muted);">${primaryLabel}</div>
+                            </div>
+                        </div>
+                        <p class="text-muted mt-2" style="font-size:0.78em;">🔴 Red/Yellow = High certainty &nbsp; 🔵 Blue = Low &nbsp; 🟢 Lung boundary</p>
+                    </div>
+                    <div class="col-md-5">
+                        <h6 class="text-muted mb-2"><i class="fas fa-chart-bar"></i> Detection Confidence</h6>
+                        ${detectionsHtml || '<p class="text-muted">No significant pathology detected.</p>'}
+                        <div class="mt-3" style="font-size:0.78em;color:var(--text-muted);">
+                            <p class="mb-1">🔬 CheXNet DenseNet-121</p>
+                            <p class="mb-1">📐 Grad-CAM++ (pixel-wise weighting)</p>
+                            <p class="mb-0">🎯 Highest certainty pathology focus</p>
+                        </div>
+                    </div>
+                </div>
+            </div></div>`;
+        }
+
+        // ===== RENDER: Detections Only (no heatmap — normal/low-confidence result) =====
+        function renderDetectionsOnly(detections) {
+            let detectionsHtml = '';
+            detections.forEach(d => {
+                const pct = (d.score * 100).toFixed(1);
+                let barClass = 'confidence-low';
+                if (d.score > 0.4) barClass = 'confidence-high';
+                else if (d.score > 0.2) barClass = 'confidence-medium';
+                detectionsHtml += `<div class="confidence-bar-container">
+                    <div class="d-flex justify-content-between mb-1" style="font-size:0.8em;">
+                        <span>${d.label}</span><span class="fw-bold">${pct}%</span>
+                    </div>
+                    <div class="confidence-bar ${barClass}" style="width:${Math.max(pct,3)}%;"></div>
+                </div>`;
+            });
+            
+            return `<div class="card mb-3 fade-in-up"><div class="card-body">
+                <h5 class="card-title"><i class="fas fa-check-circle" style="color:var(--success);"></i> Detection Confidence</h5>
+                <p class="text-muted mb-3" style="font-size:0.85em;">
+                    No significant pathology detected — Grad-CAM heatmap not generated.
+                </p>
+                ${detectionsHtml}
+                <div class="mt-3" style="font-size:0.78em;color:var(--text-muted);">
+                    <p class="mb-1">🔬 CheXNet DenseNet-121 (14 pathologies)</p>
+                    <p class="mb-0">ℹ️ Grad-CAM++ is only generated when a pathology exceeds the confidence threshold.</p>
+                </div>
+            </div></div>`;
+        }
+
+        // ===== RENDER: Differentials =====
+        function renderDifferentials(diffs) {
+            let rowsHtml = '';
+            diffs.forEach((d, i) => {
+                const prob = d.probability ? (d.probability * 100).toFixed(0) : '?';
+                const probColor = prob > 60 ? 'var(--danger)' : prob > 30 ? 'var(--warning)' : 'var(--accent)';
+                const features = d.key_features ? (Array.isArray(d.key_features) ? d.key_features.join(', ') : d.key_features) : '';
+                rowsHtml += `<div class="diff-row">
+                    <span style="min-width:30px;color:var(--text-muted);font-size:0.8em;">#${i+1}</span>
+                    <span style="min-width:180px;font-weight:600;">${d.diagnosis || d.name || 'Unknown'}</span>
+                    <div class="diff-prob-bar">
+                        <div class="diff-prob-fill" style="width:${prob}%;background:${probColor};"></div>
+                    </div>
+                    <span style="min-width:50px;text-align:right;font-weight:700;color:${probColor};">${prob}%</span>
+                </div>
+                ${features ? `<div style="padding:0 12px 4px 42px;font-size:0.75em;color:var(--text-muted);">${features}</div>` : ''}`;
+            });
+            
+            return `<div class="card mb-3 fade-in-up"><div class="card-body">
+                <h5 class="card-title"><i class="fas fa-brain"></i> Differential Diagnosis</h5>
+                <p class="text-muted mb-2" style="font-size:0.8em;">Bayesian-adjusted differential diagnosis with clinical context modifiers</p>
+                ${rowsHtml}
+            </div></div>`;
+        }
+
+        // ===== RENDER: Clinical Decision Support =====
+        function renderClinicalDecision(cd) {
+            let html = `<div class="card mb-3 fade-in-up"><div class="card-body">
+                <h5 class="card-title"><i class="fas fa-stethoscope"></i> Clinical Decision Support</h5>
+                <div class="row g-3">`;
+            
+            // CURB-65
+            if (cd.curb65) {
+                const c = cd.curb65;
+                const scoreColor = c.score <= 1 ? 'var(--success)' : c.score <= 2 ? 'var(--warning)' : 'var(--danger)';
+                html += `<div class="col-md-6"><div class="cds-card ${c.score >= 3 ? 'urgent' : c.score >= 2 ? 'warning' : 'success'}">
+                    <h6><i class="fas fa-calculator"></i> CURB-65 SEVERITY SCORE</h6>
+                    <div class="d-flex align-items-center mb-2">
+                        <span style="font-size:2.5em;font-weight:800;color:${scoreColor};margin-right:12px;">${c.score}/5</span>
+                        <div><div style="font-weight:600;">${c.risk || ''}</div>
+                        <div style="font-size:0.8em;color:var(--text-muted);">Mortality: ${c.mortality || 'N/A'}</div></div>
+                    </div>
+                    <div style="font-size:0.85em;background:var(--bg-secondary);padding:8px;border-radius:6px;">
+                        <i class="fas fa-hospital"></i> ${c.management || 'See clinical guidelines'}
+                    </div>
+                </div></div>`;
+            }
+            
+            // Antibiotics
+            if (cd.antibiotics) {
+                const ab = cd.antibiotics;
+                let abHtml = '';
+                if (ab.first_line) {
+                    abHtml += `<div class="mb-1"><span style="color:var(--success);font-weight:600;">1st Line:</span> ${Array.isArray(ab.first_line) ? ab.first_line.join(', ') : ab.first_line}</div>`;
+                }
+                if (ab.alternative) {
+                    abHtml += `<div class="mb-1"><span style="color:var(--warning);font-weight:600;">Alternative:</span> ${Array.isArray(ab.alternative) ? ab.alternative.join(', ') : ab.alternative}</div>`;
+                }
+                if (ab.duration) {
+                    abHtml += `<div><span style="color:var(--text-muted);">Duration:</span> ${ab.duration}</div>`;
+                }
+                html += `<div class="col-md-6"><div class="cds-card">
+                    <h6><i class="fas fa-pills"></i> ANTIBIOTIC RECOMMENDATIONS</h6>
+                    <div style="font-size:0.85em;">${abHtml || '<span class="text-muted">Not applicable</span>'}</div>
+                    <div style="font-size:0.7em;color:var(--text-muted);margin-top:4px;">Based on ATS/IDSA guidelines</div>
+                </div></div>`;
+            }
+            
+            // Lab Recommendations
+            if (cd.labs && cd.labs.length > 0) {
+                let labsHtml = cd.labs.map(l => {
+                    const priorityColor = l.priority === 'STAT' ? 'var(--danger)' : l.priority === 'Urgent' ? 'var(--warning)' : 'var(--success)';
+                    return `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:0.85em;border-bottom:1px solid rgba(51,65,85,0.3);">
+                        <span>${l.name || l}</span>
+                        ${l.priority ? `<span style="color:${priorityColor};font-weight:600;font-size:0.8em;">${l.priority}</span>` : ''}
+                    </div>`;
+                }).join('');
+                html += `<div class="col-md-6"><div class="cds-card">
+                    <h6><i class="fas fa-vial"></i> RECOMMENDED LABS</h6>
+                    ${labsHtml}
+                </div></div>`;
+            }
+            
+            // Follow-up Imaging
+            if (cd.followup) {
+                const fu = cd.followup;
+                html += `<div class="col-md-6"><div class="cds-card">
+                    <h6><i class="fas fa-calendar-check"></i> IMAGING FOLLOW-UP</h6>
+                    <div style="font-size:0.85em;">
+                        ${fu.timeline ? `<div class="mb-1"><strong>Timeline:</strong> ${fu.timeline}</div>` : ''}
+                        ${fu.modality ? `<div class="mb-1"><strong>Modality:</strong> ${fu.modality}</div>` : ''}
+                        ${fu.reason ? `<div style="color:var(--text-muted);">${fu.reason}</div>` : ''}
+                        ${typeof fu === 'string' ? fu : ''}
+                    </div>
+                </div></div>`;
+            }
+            
+            html += `</div>
+                <div class="mt-3" style="font-size:0.72em;color:var(--text-muted);background:var(--bg-primary);padding:8px 12px;border-radius:6px;">
+                    <i class="fas fa-exclamation-triangle" style="color:var(--warning);"></i> 
+                    <strong>Disclaimer:</strong> Clinical decision support is AI-generated and intended for educational purposes. 
+                    All recommendations must be validated by a licensed healthcare provider.
+                </div>
+            </div></div>`;
+            
+            return html;
+        }
+
+        // ===== RENDER: Diagnosis =====
+        function renderDiagnosis(diagnosis, severity, language) {
+            let severityHtml = '';
+            if (severity) {
+                const sClass = severity.toLowerCase().includes('severe') || severity.toLowerCase().includes('critical') ? 'severity-severe' :
+                               severity.toLowerCase().includes('moderate') ? 'severity-moderate' :
+                               severity.toLowerCase().includes('mild') ? 'severity-mild' : 'severity-normal';
+                severityHtml = `<span class="severity-badge ${sClass}">${severity}</span>`;
+            }
+            
+            const langNames = {en:'English',ar:'Arabic',ur:'Urdu',hi:'Hindi',es:'Spanish',fr:'French',de:'German',zh:'Chinese',pt:'Portuguese',tr:'Turkish',ru:'Russian'};
+            const langNote = language && language !== 'en' ? `<span class="badge" style="background:rgba(129,140,248,0.15);color:var(--accent-purple);margin-left:8px;"><i class="fas fa-globe"></i> ${langNames[language] || language}</span>` : '';
+            
+            const formatted = diagnosis
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/#{1,3}\s*(.*?)(?:\n|$)/g, '<h6 style="color:var(--accent);margin-top:12px;">$1</h6>')
+                .replace(/- \*\*(Opacity Pattern|Distribution|Laterality|Severity Grade|Associated Findings|Suspected Etiology|Silhouette Sign)\*\*:\s*(.*?)(?=<br>|$)/g,
+                    '<div style="display:flex;align-items:baseline;margin:4px 0;padding:4px 8px;background:var(--bg-primary);border-radius:4px;border-left:3px solid var(--accent);"><span style="color:var(--text-muted);min-width:160px;font-size:0.85em;">$1</span><span style="color:var(--text-primary);font-weight:600;">$2</span></div>')
+                .replace(/\n/g, '<br>');
+            
+            return `<div class="card mb-3 fade-in-up"><div class="card-body">
+                <h5 class="card-title"><i class="fas fa-file-medical-alt"></i> AI Radiological Report ${langNote}</h5>
+                ${severityHtml ? `<div class="mb-3">${severityHtml}</div>` : ''}
+                <div class="diagnosis-text">${formatted}</div>
+            </div></div>`;
+        }
+
+        // ===== PDF Export =====
+        async function exportPDF() {
+            if (!currentAnalysisData) { alert('No analysis data to export.'); return; }
+            
+            try {
+                const btn = document.getElementById('fabPdf');
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                
+                const response = await fetch('/export_pdf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(currentAnalysisData)
+                });
+                
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'PDF generation failed');
+                }
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `radiology_report_${new Date().toISOString().slice(0,10)}.pdf`;
+                a.click();
+                window.URL.revokeObjectURL(url);
+                
+                btn.innerHTML = '<i class="fas fa-file-pdf"></i>';
+            } catch (error) {
+                alert('Error: ' + error.message);
+                document.getElementById('fabPdf').innerHTML = '<i class="fas fa-file-pdf"></i>';
+            }
+        }
+
+        // ===== Report History =====
+        function toggleHistory() {
+            const panel = document.getElementById('historyPanel');
+            const overlay = document.getElementById('historyOverlay');
+            panel.classList.toggle('open');
+            overlay.classList.toggle('open');
+            if (panel.classList.contains('open')) loadHistory();
+        }
+
+        async function loadHistory() {
+            try {
+                const response = await fetch('/history?limit=20');
+                const data = await response.json();
+                
+                let html = '';
+                if (data.reports && data.reports.length > 0) {
+                    data.reports.forEach(r => {
+                        const date = r.timestamp ? new Date(r.timestamp).toLocaleDateString() : '—';
+                        const time = r.timestamp ? new Date(r.timestamp).toLocaleTimeString() : '';
+                        const sev = r.severity || 'N/A';
+                        const sevColor = sev.toLowerCase().includes('severe') ? 'var(--danger)' : sev.toLowerCase().includes('moderate') ? 'var(--warning)' : 'var(--success)';
+                        
+                        html += `<div class="history-item" onclick="loadReport('${r.report_id}')">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <div style="font-weight:600;font-size:0.9em;">${r.image_filename || 'Unknown'}</div>
+                                    <div style="font-size:0.75em;color:var(--text-muted);">${date} ${time}</div>
+                                </div>
+                                <span style="color:${sevColor};font-size:0.8em;font-weight:600;">${sev}</span>
+                            </div>
+                            ${r.primary_finding ? `<div style="font-size:0.8em;color:var(--accent);margin-top:4px;">${r.primary_finding}</div>` : ''}
+                        </div>`;
+                    });
+                } else {
+                    html = '<p class="text-muted text-center" style="font-size:0.85em;">No reports yet. Analyze an X-ray to get started.</p>';
+                }
+                document.getElementById('historyList').innerHTML = html;
+                
+                // Load dashboard stats
+                const statsResponse = await fetch('/dashboard');
+                const stats = await statsResponse.json();
+                let statsHtml = `<h6 style="color:var(--accent);"><i class="fas fa-chart-pie"></i> Dashboard</h6>
+                    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">
+                        <div style="background:var(--bg-primary);padding:10px;border-radius:8px;text-align:center;">
+                            <div style="font-size:1.5em;font-weight:800;color:var(--accent);">${stats.total_reports || 0}</div>
+                            <div style="font-size:0.75em;color:var(--text-muted);">Total Reports</div>
+                        </div>
+                        <div style="background:var(--bg-primary);padding:10px;border-radius:8px;text-align:center;">
+                            <div style="font-size:1.5em;font-weight:800;color:var(--accent);">${stats.today_reports || 0}</div>
+                            <div style="font-size:0.75em;color:var(--text-muted);">Today</div>
+                        </div>
+                    </div>`;
+                if (stats.severity_distribution) {
+                    statsHtml += '<div class="mt-2" style="font-size:0.8em;">';
+                    for (const [sev, count] of Object.entries(stats.severity_distribution)) {
+                        statsHtml += `<div class="d-flex justify-content-between" style="padding:2px 0;"><span>${sev}</span><span style="font-weight:600;">${count}</span></div>`;
+                    }
+                    statsHtml += '</div>';
+                }
+                document.getElementById('dashboardStats').innerHTML = statsHtml;
+                
+            } catch(e) {
+                document.getElementById('historyList').innerHTML = '<p class="text-muted">Failed to load history.</p>';
+            }
+        }
+
+        async function loadReport(reportId) {
+            try {
+                const response = await fetch(`/history/${reportId}`);
+                const data = await response.json();
+                if (data.error) { alert(data.error); return; }
+                currentAnalysisData = data;
+                renderResults(data);
+                toggleHistory();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } catch(e) {
+                alert('Failed to load report.');
+            }
+        }
+
+        // ===== Query Form =====
+        document.getElementById('queryForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const query = document.getElementById('queryInput').value.trim();
+            if (!query) return;
+            
+            const btn = e.target.querySelector('button[type="submit"]');
+            const origText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching...';
+            btn.disabled = true;
+            
+            try {
+                const response = await fetch('/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query })
+                });
+                const data = await response.json();
+                
+                if (data.error) {
+                    document.getElementById('queryResults').innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                    return;
+                }
+                
+                let html = '';
+                if (data.results && data.results.length > 0) {
+                    html += `<p class="text-muted mb-2"><i class="fas fa-book-medical"></i> Found ${data.results.length} results from radiology knowledge base</p>`;
+                    data.results.forEach((result, idx) => {
+                        const scoreColor = result.score > 0.7 ? 'success' : result.score > 0.4 ? 'warning' : 'secondary';
+                        html += `<div class="card mb-2" style="border-left: 3px solid var(--bs-${scoreColor});">
+                            <div class="card-body py-2 px-3">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <small class="text-muted">#${idx+1}</small>
+                                    <span class="badge bg-${scoreColor}">${(result.score * 100).toFixed(1)}% match</span>
+                                </div>`;
+                        if (result.type === 'text') {
+                            if (result.title) html += `<small class="text-info"><i class="fas fa-book"></i> ${result.title}</small><br>`;
+                            html += `<p class="mb-0 mt-1" style="font-size:0.9rem;">${result.content}</p>`;
+                        } else if (result.type === 'image') {
+                            html += `<p class="mb-1"><i class="fas fa-image"></i> Page ${result.page_number}</p>`;
+                            if (result.ocr_text) html += `<p class="mb-0" style="font-size:0.9rem;">${result.ocr_text}</p>`;
+                            if (result.image_data) html += `<img src="data:image/png;base64,${result.image_data}" class="img-fluid mb-2 mt-1" style="max-height:200px;">`;
+                        }
+                        html += `</div></div>`;
+                    });
+                } else {
+                    html = '<p class="text-muted"><i class="fas fa-info-circle"></i> No results found. Try a different question.</p>';
+                }
+                document.getElementById('queryResults').innerHTML = html;
+            } catch (error) {
+                document.getElementById('queryResults').innerHTML = '<div class="alert alert-danger">Error processing query. Please try again.</div>';
+            } finally {
+                btn.innerHTML = origText;
+                btn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
