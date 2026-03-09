@@ -180,7 +180,7 @@ export default function App() {
                 transition={{ duration: 0.6, ease: 'easeOut' }}
                 className="mt-8"
               >
-                <ResultsDashboard data={analysisData} />
+                <ResultsDashboard data={analysisData} onExportPdf={handleExportPDF} />
               </motion.div>
             )}
           </AnimatePresence>
