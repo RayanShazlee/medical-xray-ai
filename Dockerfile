@@ -28,8 +28,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY --chown=user . .
 
-# Create necessary directories
-RUN mkdir -p static/uploads static/reports static/react data uploads/books
+# Create necessary directories (owned by user)
+RUN mkdir -p static/uploads static/reports static/react data uploads/books && \
+    chown -R user:user static data uploads
 
 # Switch to non-root user
 USER user
